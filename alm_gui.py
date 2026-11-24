@@ -281,6 +281,125 @@ class ZoneMask16Dialog(tk.Toplevel):
 
 
 # ---------------------------------------------------------------------------
+# Visual 72C0 Color Index Picker Dialog (System/Event + User + Profile Sentinels)
+# ---------------------------------------------------------------------------
+
+class ColorIndexPickerDialog(tk.Toplevel):
+    def __init__(
+        self,
+        parent,
+        title: str,
+        current_idx: int,
+        ds72c0: Optional[object],
+        on_select: Callable[[int], None],
+    ):
+        super().__init__(parent)
+        self.title(title)
+        self.configure(bg=BG)
+        self.geometry("820x540")
+        self.transient(parent)
+        self.grab_set()
+        self.on_select = on_select
+
+        top = tk.Frame(self, bg=BG_PANEL, pady=8, padx=10, highlightbackground=BORDER, highlightthickness=1)
+        top.pack(fill="x")
+        tk.Label(top, text=title, bg=BG_PANEL, fg=ACCENT, font=("Segoe UI", 10, "bold")).pack(side="left")
+        tk.Label(
+            top, text=f"Current: 0x{current_idx:02X}", bg=BG_CARD, fg=FG,
+            font=("Consolas", 9, "bold"), padx=8, pady=2, relief="solid", bd=1,
+        ).pack(side="right")
+
+        sf = ScrollableFrame(self, bg=BG)
+        sf.pack(fill="both", expand=True, padx=8, pady=6)
+
+        has_4n0_72c0 = (ds72c0 is not None) and (not is_8w0_dataset(ds72c0)) and len(getattr(ds72c0, "lin_colors", [])) >= 50
+
+        if not has_4n0_72c0:
+            tk.Label(
+                sf.inner,
+                text="Tip: Load a 4N0/8W1 72C0 dataset to preview exact calibrated LIN RGB colors.",
+                bg=DIFF_BG, fg=AMBER, font=("Segoe UI", 8, "bold"), padx=8, pady=4,
+            ).pack(fill="x", padx=4, pady=(0, 6))
+
+        def rgb_for(idx: int):
+            if has_4n0_72c0 and 0 <= idx < 50:
+                return ds72c0.lin_colors[idx]
+            return (203, 213, 225)
+
+        def contrast(r: int, g: int, b: int) -> str:
+            return "#0f172a" if (0.299 * r + 0.587 * g + 0.114 * b) > 140 else "#ffffff"
+
+        # 1. 20 System / Event LIN Colors (0x1E..0x31 / indices 30..49)
+        sys_box = tk.LabelFrame(
+            sf.inner,
+            text="20 System / Event Colors from 72C0 (0x1E..0x31 · Click to Select)",
+            bg=BG_PANEL, fg=ACCENT, font=("Segoe UI", 9, "bold"), padx=8, pady=6,
+        )
+        sys_box.pack(fill="x", padx=4, pady=4)
+        sys_hints = {
+            0x23: "White", 0x24: "Red", 0x25: "Blue", 0x26: "Yellow", 0x27: "Orange", 0x31: "Off",
+        }
+        for j in range(20):
+            idx = 30 + j
+            r, g, b = rgb_for(idx)
+            hx = f"#{r:02X}{g:02X}{b:02X}"
+            tag = sys_hints.get(idx, hx[1:] if has_4n0_72c0 else f"#{idx}")
+            sel_bd = 3 if idx == current_idx else 1
+            btn_txt = f"0x{idx:02X}\n{tag}"
+            tk.Button(
+                sys_box, text=btn_txt, bg=hx, fg=contrast(r, g, b),
+                font=("Consolas", 8, "bold"), width=9, relief="solid", bd=sel_bd, cursor="hand2",
+                command=lambda ii=idx: self._pick(ii),
+            ).grid(row=j // 10, column=j % 10, padx=3, pady=3, sticky="ew")
+            sys_box.columnconfigure(j % 10, weight=1)
+
+        # 2. 30 User Palette LIN Colors (0x00..0x1D / indices 0..29)
+        usr_box = tk.LabelFrame(
+            sf.inner,
+            text="30 User Palette LIN Colors from 72C0 (0x00..0x1D · Click to Select)",
+            bg=BG_PANEL, fg=ACCENT, font=("Segoe UI", 9, "bold"), padx=8, pady=6,
+        )
+        usr_box.pack(fill="x", padx=4, pady=4)
+        for i in range(30):
+            r, g, b = rgb_for(i)
+            hx = f"#{r:02X}{g:02X}{b:02X}"
+            sel_bd = 3 if i == current_idx else 1
+            btn_txt = f"0x{i:02X}\n{hx[1:] if has_4n0_72c0 else f'#{i:02d}'}"
+            tk.Button(
+                usr_box, text=btn_txt, bg=hx, fg=contrast(r, g, b),
+                font=("Consolas", 7, "bold"), width=8, relief="solid", bd=sel_bd, cursor="hand2",
+                command=lambda ii=i: self._pick(ii),
+            ).grid(row=i // 10, column=i % 10, padx=3, pady=3, sticky="ew")
+            usr_box.columnconfigure(i % 10, weight=1)
+
+        # 3. Special Active MMI Profile Sentinels (0xF0 / 0xF1)
+        sent_box = tk.LabelFrame(
+            sf.inner,
+            text="Active MMI User Profile Sentinels (Dynamic User-Selected Color)",
+            bg=BG_PANEL, fg=ACCENT, font=("Segoe UI", 9, "bold"), padx=8, pady=6,
+        )
+        sent_box.pack(fill="x", padx=4, pady=4)
+        for idx, lbl in [
+            (0xF0, "0xF0 — Active MMI Profile Color 1 (Surface)"),
+            (0xF1, "0xF1 — Active MMI Profile Color 2 (Contour)"),
+        ]:
+            tk.Button(
+                sent_box, text=lbl, bg=ACCENT if idx == current_idx else BG_CARD,
+                fg="#ffffff" if idx == current_idx else FG,
+                font=("Consolas", 8, "bold"), padx=12, pady=5, relief="solid", bd=1, cursor="hand2",
+                command=lambda ii=idx: self._pick(ii),
+            ).pack(side="left", padx=6, pady=2)
+
+        bot = tk.Frame(self, bg=BG_PANEL, pady=6, padx=10, highlightbackground=BORDER, highlightthickness=1)
+        bot.pack(fill="x")
+        ttk.Button(bot, text="Cancel", command=self.destroy).pack(side="right", padx=4)
+
+    def _pick(self, idx: int):
+        self.on_select(idx)
+        self.destroy()
+
+
+# ---------------------------------------------------------------------------
 # Main Application
 # ---------------------------------------------------------------------------
 
@@ -573,9 +692,26 @@ class AlmEditorApp(tk.Tk):
     def _color_hex(self, idx: int) -> str:
         if idx in (0xF0, 0xF1):
             return ACCENT
-        if self.ds72c0 and 0 <= idx < 50:
+        if self.ds72c0 and not is_8w0_dataset(self.ds72c0) and 0 <= idx < 50:
             return self.ds72c0.get_lin_rgb_hex(idx)
         return "#cbd5e1"
+
+    def _contrast_hex(self, hex_col: str) -> str:
+        try:
+            h = hex_col.lstrip("#")
+            if len(h) == 6:
+                return self._contrast(int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+        except Exception:
+            pass
+        return "#0f172a"
+
+    def _open_color_idx_picker(self, title: str, var: tk.StringVar):
+        try:
+            cur = int(var.get().strip(), 16) & 0xFF
+        except Exception:
+            cur = 0x23
+        ds72c0_4n0 = self.ds72c0 if (self.ds72c0 and not is_8w0_dataset(self.ds72c0)) else None
+        ColorIndexPickerDialog(self, title, cur, ds72c0_4n0, lambda idx: var.set(f"{idx:02X}"))
 
     # -----------------------------------------------------------------------
     # Header Widget Helper
@@ -830,6 +966,11 @@ class AlmEditorApp(tk.Tk):
         else:
             ds.lin_colors[idx] = (r, g, b)
         self._build_72c0_tab()
+        if table != "hmi":
+            if self.ds72c1 and not is_8w0_dataset(self.ds72c1):
+                self._build_72c1_tab()
+            if self.ds72c3 and not is_8w0_dataset(self.ds72c3):
+                self._build_72c3_tab()
         self.refresh_status_and_hex()
 
     def _copy_hmi_to_lin(self):
@@ -838,6 +979,10 @@ class AlmEditorApp(tk.Tk):
         for i in range(30):
             self.ds72c0.lin_colors[i] = self.ds72c0.hmi_colors[i]
         self._build_72c0_tab()
+        if self.ds72c1 and not is_8w0_dataset(self.ds72c1):
+            self._build_72c1_tab()
+        if self.ds72c3 and not is_8w0_dataset(self.ds72c3):
+            self._build_72c3_tab()
         self.refresh_status_and_hex()
 
     @staticmethod
@@ -1207,30 +1352,43 @@ class AlmEditorApp(tk.Tk):
 
             hdr = tk.Frame(bframe, bg=BG_PANEL)
             hdr.pack(fill="x", pady=(0, 4))
-            tk.Label(hdr, text="Color Grp1 (hex):", bg=BG_PANEL, fg=FG).pack(side="left")
-            sw1 = tk.Label(hdr, text="  ", bg=self._color_hex(blk.color_grp1), width=2, relief="solid", bd=1)
-            sw1.pack(side="left", padx=3)
             c1v = tk.StringVar(value=f"{blk.color_grp1:02X}")
+            c2v = tk.StringVar(value=f"{blk.color_grp2:02X}")
+
+            tk.Label(hdr, text="Color Grp1:", bg=BG_PANEL, fg=FG).pack(side="left")
+            sw1 = tk.Button(
+                hdr, text="Pick", bg=self._color_hex(blk.color_grp1),
+                fg=self._contrast_hex(self._color_hex(blk.color_grp1)),
+                font=("Consolas", 7, "bold"), width=5, relief="solid", bd=1, cursor="hand2",
+                command=lambda v=c1v, bn=blk.name: self._open_color_idx_picker(f"72C1 {bn} — Color Grp1", v),
+            )
+            sw1.pack(side="left", padx=3)
             self._entry(hdr, textvariable=c1v, width=4, font=("Consolas", 9)).pack(side="left", padx=(0, 12))
 
-            tk.Label(hdr, text="Color Grp2 (hex):", bg=BG_PANEL, fg=FG).pack(side="left")
-            sw2 = tk.Label(hdr, text="  ", bg=self._color_hex(blk.color_grp2), width=2, relief="solid", bd=1)
+            tk.Label(hdr, text="Color Grp2:", bg=BG_PANEL, fg=FG).pack(side="left")
+            sw2 = tk.Button(
+                hdr, text="Pick", bg=self._color_hex(blk.color_grp2),
+                fg=self._contrast_hex(self._color_hex(blk.color_grp2)),
+                font=("Consolas", 7, "bold"), width=5, relief="solid", bd=1, cursor="hand2",
+                command=lambda v=c2v, bn=blk.name: self._open_color_idx_picker(f"72C1 {bn} — Color Grp2", v),
+            )
             sw2.pack(side="left", padx=3)
-            c2v = tk.StringVar(value=f"{blk.color_grp2:02X}")
             self._entry(hdr, textvariable=c2v, width=4, font=("Consolas", 9)).pack(side="left", padx=(0, 12))
 
-            tk.Label(hdr, text="(0x23 = White, 0xF0/0xF1 = Active MMI User Profile Color)", bg=BG_PANEL, fg=FG_DIM, font=("Segoe UI", 8)).pack(side="left")
+            tk.Label(hdr, text="(Click color swatch to pick from 72C0 System/Event & User colors, or 0xF0/0xF1)", bg=BG_PANEL, fg=FG_DIM, font=("Segoe UI", 8)).pack(side="left")
 
             def make_blk_cb(b, v1, v2, s1, s2):
                 def _cb(*_):
                     try:
                         b.color_grp1 = int(v1.get(), 16) & 0xFF
-                        s1.config(bg=self._color_hex(b.color_grp1))
+                        hx = self._color_hex(b.color_grp1)
+                        s1.config(bg=hx, fg=self._contrast_hex(hx))
                     except Exception:
                         pass
                     try:
                         b.color_grp2 = int(v2.get(), 16) & 0xFF
-                        s2.config(bg=self._color_hex(b.color_grp2))
+                        hx = self._color_hex(b.color_grp2)
+                        s2.config(bg=hx, fg=self._contrast_hex(hx))
                     except Exception:
                         pass
                     self.refresh_status_and_hex()
@@ -1276,27 +1434,40 @@ class AlmEditorApp(tk.Tk):
         dh = tk.Frame(dbox, bg=BG_PANEL)
         dh.pack(fill="x", pady=(0, 4))
 
-        tk.Label(dh, text="Color Grp1:", bg=BG_PANEL, fg=FG).pack(side="left")
-        dsw1 = tk.Label(dh, text="  ", bg=self._color_hex(ds.door_color_grp1), width=2, relief="solid", bd=1)
-        dsw1.pack(side="left", padx=3)
         dc1v = tk.StringVar(value=f"{ds.door_color_grp1:02X}")
+        dc2v = tk.StringVar(value=f"{ds.door_color_grp2:02X}")
+
+        tk.Label(dh, text="Color Grp1:", bg=BG_PANEL, fg=FG).pack(side="left")
+        dsw1 = tk.Button(
+            dh, text="Pick", bg=self._color_hex(ds.door_color_grp1),
+            fg=self._contrast_hex(self._color_hex(ds.door_color_grp1)),
+            font=("Consolas", 7, "bold"), width=5, relief="solid", bd=1, cursor="hand2",
+            command=lambda v=dc1v: self._open_color_idx_picker("72C1 Per-Door Open — Color Grp1", v),
+        )
+        dsw1.pack(side="left", padx=3)
         self._entry(dh, textvariable=dc1v, width=4, font=("Consolas", 9)).pack(side="left", padx=(0, 10))
 
         tk.Label(dh, text="Color Grp2:", bg=BG_PANEL, fg=FG).pack(side="left")
-        dsw2 = tk.Label(dh, text="  ", bg=self._color_hex(ds.door_color_grp2), width=2, relief="solid", bd=1)
+        dsw2 = tk.Button(
+            dh, text="Pick", bg=self._color_hex(ds.door_color_grp2),
+            fg=self._contrast_hex(self._color_hex(ds.door_color_grp2)),
+            font=("Consolas", 7, "bold"), width=5, relief="solid", bd=1, cursor="hand2",
+            command=lambda v=dc2v: self._open_color_idx_picker("72C1 Per-Door Open — Color Grp2", v),
+        )
         dsw2.pack(side="left", padx=3)
-        dc2v = tk.StringVar(value=f"{ds.door_color_grp2:02X}")
         self._entry(dh, textvariable=dc2v, width=4, font=("Consolas", 9)).pack(side="left", padx=(0, 12))
 
         def on_door_col(*_):
             try:
                 ds.door_color_grp1 = int(dc1v.get(), 16) & 0xFF
-                dsw1.config(bg=self._color_hex(ds.door_color_grp1))
+                hx = self._color_hex(ds.door_color_grp1)
+                dsw1.config(bg=hx, fg=self._contrast_hex(hx))
             except Exception:
                 pass
             try:
                 ds.door_color_grp2 = int(dc2v.get(), 16) & 0xFF
-                dsw2.config(bg=self._color_hex(ds.door_color_grp2))
+                hx = self._color_hex(ds.door_color_grp2)
+                dsw2.config(bg=hx, fg=self._contrast_hex(hx))
             except Exception:
                 pass
             self.refresh_status_and_hex()
@@ -1474,7 +1645,7 @@ class AlmEditorApp(tk.Tk):
 
         # Event Color Indices (0x042..0x04E)
         ev_box = tk.LabelFrame(
-            sf.inner, text="Dynamic Event Color Indices into 72C0 LinColors[50] (0x042..0x04E)",
+            sf.inner, text="Dynamic Event Color Indices into 72C0 LinColors[50] (0x042..0x04E — Click Swatch to Pick)",
             bg=BG_PANEL, fg=ACCENT, font=("Segoe UI", 9, "bold"), padx=8, pady=6,
         )
         ev_box.pack(fill="x", padx=8, pady=4)
@@ -1486,9 +1657,14 @@ class AlmEditorApp(tk.Tk):
             col_f = tk.Frame(ev_box, bg=BG_CARD, padx=4, pady=3, highlightbackground=BORDER, highlightthickness=1)
             col_f.grid(row=0, column=i, padx=2, pady=2)
             tk.Label(col_f, text=ename, bg=BG_CARD, fg=FG_DIM, font=("Segoe UI", 7, "bold")).pack()
-            sw = tk.Label(col_f, text="   ", bg=self._color_hex(ds.event_color_idx[i]), relief="solid", bd=1)
-            sw.pack(fill="x", pady=2)
             ev_v = tk.StringVar(value=f"{ds.event_color_idx[i]:02X}")
+            hx0 = self._color_hex(ds.event_color_idx[i])
+            sw = tk.Button(
+                col_f, text="Pick", bg=hx0, fg=self._contrast_hex(hx0),
+                font=("Consolas", 7, "bold"), relief="solid", bd=1, cursor="hand2",
+                command=lambda v=ev_v, en=ename: self._open_color_idx_picker(f"72C3 Event Color — {en}", v),
+            )
+            sw.pack(fill="x", pady=2)
             self._entry(col_f, textvariable=ev_v, width=4, font=("Consolas", 8), justify="center").pack()
 
             def make_ev_cb(ii, var, s_lbl):
@@ -1496,7 +1672,8 @@ class AlmEditorApp(tk.Tk):
                     try:
                         val = int(var.get(), 16) & 0xFF
                         ds.event_color_idx[ii] = val
-                        s_lbl.config(bg=self._color_hex(val))
+                        hx = self._color_hex(val)
+                        s_lbl.config(bg=hx, fg=self._contrast_hex(hx))
                         self.refresh_status_and_hex()
                     except Exception:
                         pass
@@ -1525,9 +1702,14 @@ class AlmEditorApp(tk.Tk):
             ).pack(side="left", padx=4)
 
             tk.Label(row, text="Color:", bg=BG_CARD, fg=FG_DIM).pack(side="left", padx=(6, 2))
-            sw = tk.Label(row, text="  ", bg=self._color_hex(kf.color_idx), width=2, relief="solid", bd=1)
-            sw.pack(side="left", padx=3)
             cv = tk.StringVar(value=f"{kf.color_idx:02X}")
+            hx0 = self._color_hex(kf.color_idx)
+            sw = tk.Button(
+                row, text="Pick", bg=hx0, fg=self._contrast_hex(hx0),
+                font=("Consolas", 7, "bold"), width=5, relief="solid", bd=1, cursor="hand2",
+                command=lambda v=cv, idx=s: self._open_color_idx_picker(f"72C3 Keyframe Step {idx} — Color", v),
+            )
+            sw.pack(side="left", padx=3)
             self._entry(row, textvariable=cv, width=4, font=("Consolas", 9)).pack(side="left")
 
             def make_kfc(k_ref, var, s_lbl):
@@ -1535,7 +1717,8 @@ class AlmEditorApp(tk.Tk):
                     try:
                         val = int(var.get(), 16) & 0xFF
                         k_ref.color_idx = val
-                        s_lbl.config(bg=self._color_hex(val))
+                        hx = self._color_hex(val)
+                        s_lbl.config(bg=hx, fg=self._contrast_hex(hx))
                         self.refresh_status_and_hex()
                     except Exception:
                         pass
