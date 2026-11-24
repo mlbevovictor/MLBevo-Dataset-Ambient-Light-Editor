@@ -27,6 +27,40 @@ Every offset, bitmask, and DTC mechanism is firmware-verified against real Power
 
 ---
 
+## Screenshots
+
+### 1. `72C0` — ALM Color (30 HMI/LIN Palettes, System Colors & Drive Select Profiles)
+Edit all 30 MMI/HMI and calibrated LIN RGB swatches (`Copy All HMI → LIN`), 20 system/event colors, 8 Drive Select / ambient profile colors (`Surf Idx` / `Cont Idx`), and per-zone brightness tables.
+
+![72C0 ALM Color](docs/screenshots/01_72c0_color.png)
+
+### 2. `72C2` — ALM Slave (`4N0` Mode: 3×16 LIN Bus Split & One-Click DTC Silencing)
+View live active/address counts across **LIN Bus 1** (Doors), **LIN Bus 2** (Dash/Console/Footwells/Seats), **LIN Bus 3** (Extended/Rear), **PWM/Direct**, and **Interior/White** channels. Silence disconnected or retrofit LED DTCs per node (**`Silence DTC (FF)`**) or globally (**`Silence All LIN DTCs (FF)`**) while keeping LED outputs active.
+
+![72C2 ALM Slave 4N0](docs/screenshots/02_72c2_4n0_slave.png)
+
+### 3. `72C2` — ALM Slave (`8W0` Mode: 16-Zone Routing, `ZERO-DTC` Slots & `8W0 → 4N0` Converter)
+Automatically switches to `8W0907063` layout when loading B9/Q5/Q7 datasets: edit the 7 × 16-zone masks, 21 zone bus/DTC routing modes (`0=Off / 1=LIN1 / 2=LIN2`), and 56 slave records with highlighted firmware **`ZERO-DTC`** slots (**`Silence DTC →`**) and the one-click **`Convert 8W0 → 4N0 (for 4N0 BCM1)`** converter.
+
+![72C2 ALM Slave 8W0](docs/screenshots/06_72c2_8w0_slave.png)
+
+### 4. `72C1` — ALM Szenario (Welcome, Leaving, Exit Warning & Per-Door Open)
+Configure global ramp/debounce timings, 4-door Exit Warning masks, Welcome/Leaving 3-step animations, and per-door open masks using the visual 80-node (`4N0`) or 16-zone (`8W0`) bitmask picker.
+
+![72C1 ALM Szenario](docs/screenshots/03_72c1_scenario.png)
+
+### 5. `72C3` — ALM Dynamik (Climate/Seat Feedback & Welcome/Wipe/Pulse Keyframes)
+Toggle climate and seat heating/ventilation feedback (`0x03F` / `0x041`), edit dynamic event colors, ramp/decay curves, and the 10-step Welcome/Wipe/Pulse keyframe sequence (`4N0`).
+
+![72C3 ALM Dynamik](docs/screenshots/04_72c3_dynamic.png)
+
+### 6. Hex & Diff Inspector (Live Byte-Level Diff & CRC-32 Verification)
+Inspect the exact serialized payload with real-time highlighting of every modified byte and automatic Big-Endian IEEE CRC-32 recalculation before exporting to XML or raw `.bin`.
+
+![Hex & Diff Inspector](docs/screenshots/05_hex_diff.png)
+
+---
+
 ## Quick Start
 
 ### Option 1: Standalone Windows Executable (No Python Required)
