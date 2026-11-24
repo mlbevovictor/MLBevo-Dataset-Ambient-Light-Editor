@@ -560,7 +560,7 @@ class AlmEditorApp(tk.Tk):
             raw = ds.to_bytes()
             _, calc, _ = verify_crc32(raw)
             modified = (raw != ds.original_raw)
-            plat = "8W0" if is_8w0_dataset(ds) else "4N0"
+            plat = "8W0" if is_8w0_dataset(ds) else "4N0/8W1"
             tag = "MODIFIED" if modified else "CLEAN"
             col = AMBER if modified else GREEN
             bg_c = DIFF_BG if modified else "#dcfce7"
@@ -1029,7 +1029,7 @@ class AlmEditorApp(tk.Tk):
             self._build_72c2_tab()
             self.refresh_status_and_hex()
             self.status_lbl.config(
-                text=f"Silenced DTC on 4N0 node N{node:02d} (set 0x{0x0A2+node:03X} = FF; LED output remains active)."
+                text=f"Silenced DTC on 4N0/8W1 node N{node:02d} (set 0x{0x0A2+node:03X} = FF; LED output remains active)."
             )
 
     def _silence_all_4n0_lin_dtcs(self):
@@ -1039,7 +1039,7 @@ class AlmEditorApp(tk.Tk):
         self._build_72c2_tab()
         self.refresh_status_and_hex()
         self.status_lbl.config(
-            text=f"Silenced all 4N0 LIN DTCs ({changed} slots set to FF in 0x0A2..0x0D1; LED outputs untouched)."
+            text=f"Silenced all 4N0/8W1 LIN DTCs ({changed} slots set to FF in 0x0A2..0x0D1; LED outputs untouched)."
         )
 
     def _refresh_72c2_bank_counts(self):
@@ -1793,7 +1793,7 @@ class AlmEditorApp(tk.Tk):
                 bg=BG_PANEL, fg=FG_DIM, font=("Consolas", 9),
             ).pack(side="left", padx=8)
             ttk.Button(
-                bar, text="Convert 8W0 → 4N0 (for 4N0 BCM1)...",
+                bar, text="Convert 8W0 → 4N0/8W1 (for 4N0/8W1 BCM1)...",
                 command=self._open_convert_72c2_8w0_to_4n0_dialog,
             ).pack(side="right", padx=4)
 
@@ -1974,14 +1974,14 @@ class AlmEditorApp(tk.Tk):
         if not is_8w0_dataset(self.ds72c2):
             return
         dlg = tk.Toplevel(self)
-        dlg.title("Convert 72C2: 8W0907063 → 4N0907063 (STRUCT620)")
+        dlg.title("Convert 72C2: 8W0907063 → 4N0907063 / 8W1907063 (STRUCT620)")
         dlg.configure(bg=BG)
-        dlg.geometry("540x240")
+        dlg.geometry("560x240")
         dlg.transient(self)
         dlg.grab_set()
 
         box = tk.LabelFrame(
-            dlg, text="8W0 LEDs on 4N0 BCM1 — Conversion Options",
+            dlg, text="8W0 LEDs on 4N0/8W1 BCM1 — Conversion Options",
             bg=BG_PANEL, fg=ACCENT, font=("Segoe UI", 9, "bold"), padx=12, pady=10,
         )
         box.pack(fill="both", expand=True, padx=10, pady=10)
@@ -1990,8 +1990,8 @@ class AlmEditorApp(tk.Tk):
             box,
             text=(
                 f"Source: 8W0 72C2 ({self.ds72c2.version.strip()}, 510 B)  →  "
-                f"Target: 4N0 72C2 (STRUCT620 v3.6.2.0, 522 B)\n"
-                "Maps 8W0 LIN Bus 1/2 slaves 1:1 to 4N0 Nodes 0..47, color groups, and door zones."
+                f"Target: 4N0/8W1 72C2 (STRUCT620 v3.6.2.0, 522 B)\n"
+                "Maps 8W0 LIN Bus 1/2 slaves 1:1 to 4N0/8W1 Nodes 0..47, color groups, and door zones."
             ),
             bg=BG_PANEL, fg=FG, justify="left", font=("Segoe UI", 8),
         ).pack(anchor="w", pady=(0, 8))
@@ -1999,14 +1999,14 @@ class AlmEditorApp(tk.Tk):
         sup_v = tk.BooleanVar(value=True)
         tk.Checkbutton(
             box,
-            text="Suppress LIN DTCs (set 0x0A2..0x0D1 = FF — recommended for 8W0 LEDs on 4N0 BCM1)",
+            text="Suppress LIN DTCs (set 0x0A2..0x0D1 = FF — recommended for 8W0 LEDs on 4N0/8W1 BCM1)",
             variable=sup_v, bg=BG_PANEL, fg=FG, selectcolor=BG_INPUT, activebackground=BG_PANEL,
         ).pack(anchor="w", pady=3)
 
         pwm_v = tk.BooleanVar(value=True)
         tk.Checkbutton(
             box,
-            text="Enable standard B9/4N0 PWM (N50..N54) & Interior/White (N64..N73) channels",
+            text="Enable standard B9/4N0/8W1 PWM (N50..N54) & Interior/White (N64..N73) channels",
             variable=pwm_v, bg=BG_PANEL, fg=FG, selectcolor=BG_INPUT, activebackground=BG_PANEL,
         ).pack(anchor="w", pady=3)
 
@@ -2024,13 +2024,13 @@ class AlmEditorApp(tk.Tk):
             self._build_72c2_tab("all")
             self.refresh_status_and_hex()
             act_lin = sum(1 for i in range(48) if converted.active_nodes[i])
-            mode_txt = "0xFF (DTCs suppressed)" if sup_v.get() else "OEM 4N0 Diag IDs"
+            mode_txt = "0xFF (DTCs suppressed)" if sup_v.get() else "OEM 4N0/8W1 Diag IDs"
             self.status_lbl.config(
-                text=f"Converted 8W0 72C2 → 4N0 72C2 ({act_lin} active LIN nodes, Diag={mode_txt}). Click 'Save Current XML' to export."
+                text=f"Converted 8W0 72C2 → 4N0/8W1 72C2 ({act_lin} active LIN nodes, Diag={mode_txt}). Click 'Save Current XML' to export."
             )
 
         ttk.Button(bot, text="Cancel", command=dlg.destroy).pack(side="right", padx=4)
-        ttk.Button(bot, text="Convert to 4N0 (522 B)", command=do_convert).pack(side="right", padx=4)
+        ttk.Button(bot, text="Convert to 4N0/8W1 (522 B)", command=do_convert).pack(side="right", padx=4)
 
     def _set_attr_hex(self, obj, attr: str, var: tk.StringVar):
         try:
