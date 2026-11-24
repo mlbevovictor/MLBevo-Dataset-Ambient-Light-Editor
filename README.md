@@ -45,8 +45,9 @@ python alm_gui.py
 - [8W0907063 (B9 / Q5 FY / Q7 4M) `72C0`–`72C3` Structural Specification](docs/8W0907063_72C0_72C3.md)
 
 ## Contributors
-- **mlbevovictor**
-- **REA** (Reverse Engineer Anything)
+- **mlbevovictor** — Project owner, dataset collection & real-vehicle hardware verification
+- **Google Antigravity** — Firmware reverse engineering, Python codec/GUI implementation & documentation
+- **REA** ([Reverse Engineer Anything](https://github.com/morluto/rea)) — Binary & artifact analysis framework
 
 ## Disclaimer
 Modifying vehicle ECU datasets carries inherent risk. Always back up your original BCM1 datasets before flashing with ODIS-E / VCP / VCDS.
