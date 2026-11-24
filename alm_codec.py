@@ -854,14 +854,14 @@ ZERO_DTC_SLOTS_8W0 = frozenset({
 
 def move_8w0_slave_to_zero_dtc_slot(ds: Dataset72C2_8W0, src_idx: int) -> Optional[int]:
     """
-    Move an active 8W0 72C2 slave record from a DTC-monitored slot to a free
-    firmware ZERO-DTC slot so the LED stays ON with zero DTC errors.
+    Move an 8W0 72C2 slave record (active or inactive, as long as lin_id != 0)
+    from a DTC-monitored slot to a free firmware ZERO-DTC slot so DTCs are silenced.
     Returns the destination slot index, or None if no free ZERO-DTC slot exists.
     """
     if not (0 <= src_idx < 56) or src_idx in ZERO_DTC_SLOTS_8W0:
         return None
     src = ds.slaves[src_idx]
-    if not src.active or src.lin_id == 0:
+    if src.lin_id == 0:
         return None
 
     def is_free(idx: int) -> bool:

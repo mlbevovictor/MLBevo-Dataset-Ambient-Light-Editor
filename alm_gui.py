@@ -1136,12 +1136,23 @@ class AlmEditorApp(tk.Tk):
                 self._spinbox(sf.inner, from_=0, to=6, textvariable=grp_v, width=4).grid(row=row_i, column=4, padx=4)
                 grp_v.trace_add("write", lambda *_, ni=n, v=grp_v: self._set_72c2_group(ni, v))
 
+                dtc_btn = None
                 if n < 48:
+                    is_silenced = (ds.lin_addresses[n] == 0xFF)
+                    dtc_btn = ttk.Button(
+                        sf.inner,
+                        text=("DTC Silenced (FF)" if is_silenced else "Silence DTC (FF)"),
+                        state=("disabled" if is_silenced else "normal"),
+                        command=lambda ni=n: self._silence_4n0_node_dtc(ni),
+                    )
+                    dtc_btn.grid(row=row_i, column=10, padx=3, pady=1)
+
                     lin_v = tk.StringVar(value=f"{ds.lin_addresses[n]:02X}")
                     self._entry(sf.inner, textvariable=lin_v, width=5, font=("Consolas", 9)).grid(row=row_i, column=5, padx=4)
-                    lin_v.trace_add("write", lambda *_, ni=n, v=lin_v, hl=hint_lbl: self._set_72c2_lin(ni, v, hl))
+                    lin_v.trace_add("write", lambda *_, ni=n, v=lin_v, hl=hint_lbl, db=dtc_btn: self._set_72c2_lin(ni, v, hl, db))
                 else:
                     tk.Label(sf.inner, text="—", bg=bg_r, fg=FG_DIM).grid(row=row_i, column=5)
+                    tk.Label(sf.inner, text="—", bg=bg_r, fg=FG_DIM).grid(row=row_i, column=10)
 
                 for z in range(1, 5):
                     zv = tk.BooleanVar(value=ds.zone_masks[z][n])
@@ -1149,22 +1160,6 @@ class AlmEditorApp(tk.Tk):
                         sf.inner, variable=zv, bg=bg_r, selectcolor=BG_INPUT, activebackground=bg_r,
                         command=lambda ni=n, zi=z, v=zv: self._set_72c2_zone(zi, ni, v.get()),
                     ).grid(row=row_i, column=5 + z)
-
-                if n < 48:
-                    if ds.lin_addresses[n] != 0xFF:
-                        ttk.Button(
-                            sf.inner, text="Silence DTC (FF)",
-                            command=lambda ni=n: self._silence_4n0_node_dtc(ni),
-                        ).grid(row=row_i, column=10, padx=3, pady=1)
-                    elif ds.active_nodes[n]:
-                        tk.Label(
-                            sf.inner, text="DTC Silenced", bg=bg_r, fg="#7e22ce",
-                            font=("Segoe UI", 8, "bold"),
-                        ).grid(row=row_i, column=10, padx=3)
-                    else:
-                        tk.Label(sf.inner, text="", bg=bg_r).grid(row=row_i, column=10)
-                else:
-                    tk.Label(sf.inner, text="—", bg=bg_r, fg=FG_DIM).grid(row=row_i, column=10)
 
                 row_i += 1
 
@@ -1216,13 +1211,18 @@ class AlmEditorApp(tk.Tk):
         except Exception:
             pass
 
-    def _set_72c2_lin(self, node: int, var: tk.StringVar, hint_lbl=None):
+    def _set_72c2_lin(self, node: int, var: tk.StringVar, hint_lbl=None, dtc_btn=None):
         try:
             val = int(var.get(), 16) & 0xFF
             self.ds72c2.lin_addresses[node] = val
             if hint_lbl is not None:
                 hint = LIN_ADDR_HINTS.get(val, "LIN RGB Slave" if val != 0xFF else "Unused LIN Slot")
                 hint_lbl.config(text=hint)
+            if dtc_btn is not None:
+                if val == 0xFF:
+                    dtc_btn.config(text="DTC Silenced (FF)", state="disabled")
+                else:
+                    dtc_btn.config(text="Silence DTC (FF)", state="normal")
             self._refresh_72c2_bank_counts()
             self.refresh_status_and_hex()
         except Exception:
@@ -1979,6 +1979,10 @@ class AlmEditorApp(tk.Tk):
                 bar, text="Convert 8W0 → 4N0/8W1 (for 4N0/8W1 BCM1)...",
                 command=self._open_convert_72c2_8w0_to_4n0_dialog,
             ).pack(side="right", padx=4)
+            ttk.Button(
+                bar, text="Silence All LIN DTCs",
+                command=self._silence_all_8w0_lin_dtcs,
+            ).pack(side="right", padx=4)
 
         self._build_header_bar_8w0(self.tab_72c2, ds, "0x120 (288 B) @ RAM 0x400198EC", extra_hdr)
 
@@ -2096,7 +2100,6 @@ class AlmEditorApp(tk.Tk):
 
             li_v = tk.StringVar(value=f"{sl.lin_id:02X}")
             self._entry(tbl, textvariable=li_v, width=5, font=("Consolas", 9)).grid(row=row_i, column=3, padx=4)
-            li_v.trace_add("write", lambda *_, s_ref=sl, v=li_v: self._set_attr_hex(s_ref, "lin_id", v))
 
             z_hint = tk.Label(tbl, text=ZONE_16_NAMES_8W0.get(sl.zone_id, f"Z{sl.zone_id:02d}"), bg=bg_r, fg=FG_DIM, font=("Segoe UI", 8), anchor="w", width=24)
             z_hint.grid(row=row_i, column=5, sticky="ew", padx=4)
@@ -2122,15 +2125,41 @@ class AlmEditorApp(tk.Tk):
                 ),
             ).grid(row=row_i, column=7)
 
-            if sl.active and sl.lin_id != 0 and i not in ZERO_DTC_SLOTS_8W0:
-                ttk.Button(
+            if i not in ZERO_DTC_SLOTS_8W0:
+                dtc_btn_8w0 = ttk.Button(
                     tbl, text="Silence DTC →",
+                    state=("normal" if sl.lin_id != 0 else "disabled"),
                     command=lambda ii=i: self._move_8w0_slave_zero_dtc(ii),
-                ).grid(row=row_i, column=8, padx=3, pady=1)
-            elif i in ZERO_DTC_SLOTS_8W0 and sl.active:
-                tk.Label(tbl, text="DTC Silenced", bg=bg_r, fg="#7e22ce", font=("Segoe UI", 8, "bold")).grid(row=row_i, column=8, padx=3)
+                )
+                dtc_btn_8w0.grid(row=row_i, column=8, padx=3, pady=1)
+                def make_li_cb(ii, s_ref, v, dl, db):
+                    def _cb(*_):
+                        self._set_attr_hex(s_ref, "lin_id", v)
+                        dl.config(**dict(zip(("text", "bg", "fg"), slave_dtc_status(ii, s_ref))))
+                        db.config(state=("normal" if s_ref.lin_id != 0 else "disabled"))
+                    return _cb
+                li_v.trace_add("write", make_li_cb(i, sl, li_v, dtc_lbl, dtc_btn_8w0))
             else:
-                tk.Label(tbl, text="", bg=bg_r).grid(row=row_i, column=8)
+                z_lbl = tk.Label(
+                    tbl,
+                    text=("DTC Silenced" if sl.lin_id != 0 else "Zero-DTC Slot"),
+                    bg=bg_r,
+                    fg=("#7e22ce" if sl.lin_id != 0 else FG_DIM),
+                    font=("Segoe UI", 8, "bold" if sl.lin_id != 0 else "normal"),
+                )
+                z_lbl.grid(row=row_i, column=8, padx=3)
+                def make_z_li_cb(ii, s_ref, v, dl, zl):
+                    def _cb(*_):
+                        self._set_attr_hex(s_ref, "lin_id", v)
+                        dl.config(**dict(zip(("text", "bg", "fg"), slave_dtc_status(ii, s_ref))))
+                        has_id = (s_ref.lin_id != 0)
+                        zl.config(
+                            text=("DTC Silenced" if has_id else "Zero-DTC Slot"),
+                            fg=("#7e22ce" if has_id else FG_DIM),
+                            font=("Segoe UI", 8, "bold" if has_id else "normal"),
+                        )
+                    return _cb
+                li_v.trace_add("write", make_z_li_cb(i, sl, li_v, dtc_lbl, z_lbl))
             row_i += 1
 
     def _move_8w0_slave_zero_dtc(self, src_idx: int):
@@ -2141,8 +2170,26 @@ class AlmEditorApp(tk.Tk):
         self._build_72c2_tab()
         self.refresh_status_and_hex()
         self.status_lbl.config(
-            text=f"Moved 8W0 slave S{src_idx:02d} → S{dst:02d} (firmware ZERO-DTC slot: LED stays ON, DTCs deactivated)."
+            text=f"Moved 8W0 slave S{src_idx:02d} → S{dst:02d} (firmware ZERO-DTC slot: DTCs deactivated)."
         )
+
+    def _silence_all_8w0_lin_dtcs(self):
+        ds = self.ds72c2
+        moved = 0
+        skipped = 0
+        for i, sl in enumerate(ds.slaves):
+            if i not in ZERO_DTC_SLOTS_8W0 and sl.lin_id != 0:
+                dst = move_8w0_slave_to_zero_dtc_slot(ds, i)
+                if dst is not None:
+                    moved += 1
+                else:
+                    skipped += 1
+        self._build_72c2_tab()
+        self.refresh_status_and_hex()
+        msg = f"Silenced {moved} 8W0 LIN slave(s) by moving to firmware ZERO-DTC slots."
+        if skipped:
+            msg += f" ({skipped} skipped: all 18 ZERO-DTC slots are full.)"
+        self.status_lbl.config(text=msg)
 
     def _set_8w0_zone_cfg(self, idx: int, which: int, var: tk.IntVar):
         try:
